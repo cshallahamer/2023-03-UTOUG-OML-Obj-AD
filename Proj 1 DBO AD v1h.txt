@@ -1,0 +1,1319 @@
+v1h 2-Mar-2023 at 3:07pm
+
+----------------------------------
+Record your OCI details, if you want to. My details are shown below.
+
+Cloud Account:  sam8071 
+Username:       sam@orapub.com
+Password:       **** 
+ADW5 password: 0897ydOPuahio87  (I use the same password for EVERYTHING below)
+
+----------------------------------
+Quick Links, will save many clicks
+
+(Of course, enter your own URLs.)
+
+ADB Home Page: https://cloud.oracle.com/db/adb
+ADW Home Page: https://cloud.oracle.com/db/adb/ocid1.autonomousdatabase.oc1.phx.anyhqljrch2pmxqappvh7dfkalob2rviapni3odu76p7nx5puk5tncakkf3q?region=us-phoenix-1
+ADW OML Home Page: https://ge3404bae38f1da-adw5.adb.us-phoenix-1.oraclecloudapps.com/oml/index.html
+
+
+Project 1: Unusual Oracle DB Table Activity Detection
+
+The Problem
+
+An application goes sideways, starts inserting rows and no one knows until
+four hours later. By then, the damage has been done.
+
+If this is not your world, read closely because you can apply this project to any table
+that grows over time. Two examples are using an INVOICE table or CUSTOMER table.
+
+Our Solution
+
+Using the OCI OML Notebook Job facility, schedule anomaly detection every 20 minutes
+focused a specific table.
+
+
+Our Process
+
+    Summary
+
+Our process can be distilled into Development and into Deployment processes.
+
+The Development process occurs on a non-production Oracle Autonomous DB environment
+and is where you will build and evaluate your model using three exported AWR views
+in CSV format.
+
+The Deployment process uses the core Development build and evaluation code as the
+base for the Deployment code. Additionally, the Deployment code will insert the anomaly
+detection result into a logging table. The anomaly detection is automatically run
+using the OML Jobs facility.
+
+    The ML Algorithm
+
+We will use the OML One-Class Support Vector Machine algorithm because it is commonly
+used for anomaly detection, it's a very straightforward algorithm and its sensitivity
+can be adjusted using a single parameter.
+
+
+What You Need To Do This Project
+
+This project has a couple of deployment options. In fact, you can do both deployment
+options. Below is what you will need to successfully complete this project.
+
+- Desktop SQL*Developer; Makes some things much easier and faster
+
+- OCI Login; free tier should work
+
+- Development: Ability to create an Autonomous Data Warehouse DB (free tier should work)
+
+- Deployment, there are two options. 
+
+	A. Deploy using a different DB user, but in the development ADB checking
+	   SYS.COL_USAGE$ for anomalies.
+	B. Ability to deploy in a production ADW, checking a production table for anomalies.
+
+	
+Tools
+
+You will be using both OML Notebooks and SQL*Developer. SQL*Developer shines when there
+is a need to develop a series of PL/SQL statements can be quickly executed as a single
+unit. Personally, I prefer the desktop SQL*Developer as opposed to the OCI version, but
+either will work. I discuss this more below.
+
+OML Notebooks shine when visualization is helpful and specific pieces of code are being
+developed or executed. Both Development and Deployment work will use OML Notebooks.
+
+
+The Data
+
+This project focused on anomalous Oracle TABLE activity. Fortunately, this data is
+automatically collected and stored by Oracle's AWR facility. These are the three tables
+we will be using:
+
+    DBA_HIST_SNAPSHOT provides SNAP_ID details
+    DBA_HIST_SEG_STAT provides ACTIVITY details (over 14 attributes)
+    DBA_HIST_SEG_STAT_OBJ provides NAME details; object, tablespace, etc.
+
+
+ML Development Database
+
+You will need an Oracle Autonomous Database. While I use the Data Warehouse option in
+this book, the Transaction Processing DB option should also work.
+
+About passwords. Don't tell anyone I told you this, but non production systems,for
+each database and all associated users and projects, I use the one and only one
+password. Why? Because passwords are so 80's and a freak'n nightmare to maintain and
+remember. Moving on...
+
+    Create You Development ADW DB
+    
+To create the database, login to OCI and navigate to the Autonomous Database page. 
+
+Tip: Save the URL, as this is you "ADB Home Page"
+     For example, https://cloud.oracle.com/db/adb?region=us-phoenix-1
+     
+Confirm your chosen OCI compartment (root will work), then click the "Create Autonomous
+Database" button.
+
+Usually I take most of the defaults, but here are a few items to consider:
+
+- Naming. I typically change the Display Name and Database Name to something like ADW5. 
+
+- Free Tier: If you want a free tier ADB, make sure you click the "Always Free" radio
+  button. This is how you ensure your credit card will never be charged.
+
+- Database Version. Any version should work, though I usually choose the most recent
+  available version.
+
+- License. You may also need to choose your license. If you're not sure what to select,
+  select the option, "License included."
+
+When the database is being provisioned and has been provisioned, you will be on your
+database "home page". I will refer this "home page" throughout the project.
+
+Tip: Save the URL, as this will be your "ADW Home Page".
+     For example, https://cloud.oracle.com/db/adb/ocid1.autonomousdatabase.oc1.phx.anyhqljrch2pmxqappvh7dfkalob2rviapni3odu76p7nx5puk5tncakkf3q?region=us-phoenix-1
+
+From you Database Homepage (see what I mean), notice the "DB Actions" and "Connection"
+tabs. When your database provisioned and available, continue with the steps below.
+
+
+    About The "DB Actions" Tab
+    
+Now click on the "DB Actions" tab. Notice the multiple groupings: Development,
+Data Studio, Administration, Monitoring, Downloads and finally Related Services.
+
+Most of your work will be in the Development "SQL" and "Oracle Machine Learning" areas.
+You will need to load some model training data into your database using the Data
+Studio "Data Load" area for this.
+
+Also notice the user in upper right corner of the screen. The user is probably ADMIN.
+Click on the username and notice the dropdown options. When you want to connect as a
+different DB user, click "Sign Out" and then you will see the sign in form.
+
+But before you can do anything inside your database, you need to create your ML
+Development DB User! Read on.
+
+
+    Download The Connection Wallet
+
+In the "DB Actions" tab, look for the "Administration" group, then click on the
+"Download Client Credentials (Wallet)" box.
+
+Download the wallet to your desktop. Store the file on in your Desktop where you store
+other wallet files or in a place where you will remember (eg, your Desktop). You will
+be using this file to connect to this database using your desktop SQL*Developer client.
+
+
+Caution: Changing DB Users
+
+As with many web based applications, connecting as two different users in the same
+browser, can create problems. I'm not an app developer, but for some weird reason the
+cookies can get messed up. Then why not use another strategy? (I don't think I'm
+supposed to ask this question.)
+
+When you need to switch to another DB user, say from ADMIN to ML_DEVEL, do NOT open a
+new tab and sign in as ML_DEVEL. First, for the ADMIN account, sign out and then
+sign in as ML_DEVEL.
+
+Usually when I want to switch users, it's because I'm doing admin work or
+perhaps working on SQL processing development. Consider using your desktop SQL*Developer
+for this. In desktop SQL*Developer you can be connected to as many different users and
+databases as you want. Wonderful. (The 80s were pretty awesome!)
+
+Tip: Use SQL*Developer desktop when you are working multiple database users.
+
+For this project I always have two desktop WINDOWS open; Browser on the Database Actions
+and/or OML page and the other running desktop SQL*Developer. When I do this, along
+with signing off appropriately, everything works fine.
+
+Tip: Use two windows: SQL*Developer on your Desktop and browser.
+
+Using two browsers, for example Chrome and Firefox is another option... but then you
+have your passwords stored in two browsers... and keep them synced. Not optimal.
+
+
+
+ML Development User Setup
+
+All development occurs in an OML Notebook, connected as ML_DEVEL to your Oracle
+Autonomous DB. Here is how to create your ML_DEVEL DB user.
+
+    Sign in to OCI, goto your ADB home page.
+    Click Database Actions >
+        Ensure ADMIN user shown on upper right of screen
+            If not, click displayed username > Sign Out > Sign In as ADMIN
+    Click Database Actions > Administration > Database Users
+    Click "+ Create User" near the right side of your screen
+        User Name: ML_DEVEL
+        Password: *****
+        Quota on tablespace DATA: 500M  (default is 100M)
+        Password Expired: Off
+        Account is Locked: Off
+        Graph: Off
+        Web Access: On
+        OML: On
+    Click: Create User (bottom right)
+
+Done. Let's load some data!
+
+
+
+ML Development Training Data Creation
+
+When you explore your training data and build your initial anomaly detection model,
+you will be working in your Development DB and using the "Development OML Notebook."
+You can use either your own training data or you can use my training data.
+
+When you deploy your model, you will be using the "Deployment OML Notebook" but you can
+be working in either your Development DB or one of your production ADBs.
+
+In fact, most people will first "deploy" in their Development DB and then truly deploy
+in one of their production ADBs.
+
+Tip: If you are new to OML or just cautious, it is a good idea use my data.
+
+You may be wondering how it is possible to "deploy" your "Deployment OML Notebook" in
+your Development DB. First, the Deployment OML Notebook always reads real-life true AWR
+segment data. Second, all Oracle Autonomous Databases collect AWR segment data. It's
+built into every Oracle Autonomous Database.
+
+Interestingly, anomalies are detected even when deployment occurs in your Development
+DB. Why? Initially it is because of the unusual activity that occurs at night... when
+much of the "autonomous" routines occur! Over time, your anomaly detection system
+learns this nightly activity is not unusual.
+
+
+    Using My Training Data
+
+If at this time, you are not deploying your model into a production Oracle Autonomous
+Database, you can use my AWR data in the Development OML Notebook. Simply download these
+three CSV files to your desktop.
+
+    http://filebank.orapub.com/DataSets/emt_dba_hist_seg_stat.csv
+    http://filebank.orapub.com/DataSets/emt_dba_hist_seg_stat_obj.csv
+    http://filebank.orapub.com/DataSets/emt_dba_hist_snapshot.csv
+    
+With the three CSV in your possession, skip down to the section, "ML Development
+Data Loading"
+
+
+    
+    Using Your Training Data
+
+If at this time, you are deploying in one of your production Oracle Autonomous
+Databases, you will want to use some of your real-life production AWR data when working
+with the Development OML Notebook. 
+
+Using your production data is optimal. Exploring your production data and also building
+and evaluating your anomaly detection system using your production data reduces the
+chances of an underperforming model being deployed.
+
+Plus, it's always more interesting and exciting to use your own real production data.
+But most of all, you will go through an actual bonafide entire development and
+deployment process. Priceless.
+
+Using your own data requires you to create the CSV files from your production system.
+One of the easiest ways to do this is using the desktop SQL*Developer's Database
+Export facility. Here's how to do this:
+
+    Open SQL*Developer desktop client
+        Create two users connections to the ADW DB you just created.
+        Use the Wallet you just downloaded.
+        The two users are: ADMIN and ML_DEVEL
+    Open Connection as user ADMIN
+    Run these 6 SQL statements, to create our working tables.
+        -- Drop will error when object does not exist.
+        drop table emt_dba_hist_seg_stat purge;
+        drop table emt_dba_hist_seg_stat_obj purge;
+        drop table emt_dba_hist_snapshot purge;
+        create table emt_dba_hist_seg_stat as select * from dba_hist_seg_stat;
+        create table emt_dba_hist_seg_stat_obj as select * from dba_hist_seg_stat_obj;
+        create table emt_dba_hist_snapshot as select * from dba_hist_snapshot;
+    Click Tools > Database Export
+    Source/Destination Page
+        Connection: ADMIN
+        Export DDL: uncheck
+        Export Data: check
+            Format: csv (may need to scroll to top of list)
+            Header: check
+        Save As: Separate Files
+        File: Anything but the default, such as your desktop
+        Click Next
+    Types to Export
+        Toggle All Standard: uncheck
+        Tables: check
+        Click Next
+    Specify Objects
+        Name: emt_
+        Click Lookup
+        Highlight, the 3 "emt_" working tables.
+            emt_dba_hist_seg_stat
+            emt_dba_hist_seg_stat_obj
+            emt_dba_hist_snapshot
+        Click down arrow
+        Click Next
+    Export Summary
+        Click Next
+    Ensure the CSV exported correctly.
+        They should each exist, contain data and have a header row.
+    Run these 3 SQL statements, to remove our working tables.
+        drop table emt_dba_hist_seg_stat purge;
+        drop table emt_dba_hist_seg_stat_obj purge;
+        drop table emt_dba_hist_snapshot purge;
+
+After exporting and renaming the CSV files, you will have these three files:
+
+    emt_dba_hist_seg_stat.csv
+    emt_dba_hist_seg_stat_obj.csv
+    emt_dba_hist_snapshot.csv    
+    
+With the three CSV in your possession, let's load them into the development ADB.
+
+
+
+ML Development Data Loading
+
+With the three "emt_" prefixed CSV files, you will be using the OCI DB Actions,
+Data Studio: Data Loader. There are other ways to load the data, but getting familiar
+with the OCI related tools is beneficial. And, it just works.
+
+Here are the steps:
+
+    Sign in to OCI, goto your ADB home page.
+    Database Actions >
+        Ensure ML_DEVEL user shown on upper right of screen
+            If not, click displayed username > Sign Out > Sign In as ML_DEVEL
+    Database Actions > Data Studio: Data Load
+        Click: LOAD DATA, LOCAL FILE, Next Button
+        Drag the 3 "emt_" csv files into the dialog box
+        Click the little green RUN button
+        The load process usually takes up to 5 minutes but can take 10 minutes.
+        
+If there is a problem, usually it's because the "header line" was not included into
+the exported CSV file.
+
+Now it's time to create the Development OML Notebook!
+
+
+-------------------------------------------------------------
+Development OML Notebook
+
+With your OML DB User created (ie, ML_DEVEL) and your development training data
+loaded, its time to do some Machine Learning!
+
+In the Development Notebook we explore the training dataset(s), determine the best
+predictors, build our model and test the model.
+
+It is time to create your first OML Notebook!
+
+    Sign in to OCI, goto your ADB home page.
+    Database Actions >
+        Ensure ML_DEVEL user shown on upper right of screen
+            If not, click displayed username > Sign Out > Sign In as ML_DEVEL
+    Database Actions > Development: Oracle Machine Learning
+        Tip: Save this URL, as your "ADW OML Home Page".
+             For example, https://ge3404bae38f1da-adw5.adb.us-phoenix-1.oraclecloudapps.com/oml/index.html
+
+        Click the hamburger in the upper left
+            > Project > Notebooks
+        Click "+ Create" to create a new notebook
+            Name: Project 1 Development
+            Comment: Unusual Oracle DB Table Activity Detection
+            Click OK button and eventually you see a new empty notebook.
+        
+        
+
+Quick Notebook Primer
+
+If you have never worked with OML or OML Notebooks, Oracle has a pretty good tour to
+help you get started. You can always skip this "tour" and watch if you get stuck below.
+
+The "tour" may be out of date a little, but the concepts are solid. Here is the link:
+    
+    https://docs.oracle.com/en/database/oracle/machine-learning/oml-notebooks/
+    
+All notebooks, including Oracle's chosen notebook type, are divided up into what are
+called "cells" or "paragraphs." Each cell has a type (code or markdown) and the first
+line will contain either %sql or %script for Code cells, or %md for a Markdown cell.
+    
+Cell is run/executed by clicking the cell run button or SHIFT+ENTER.
+
+Cell is formatted, including be deleted, moved up or down by clicking the cell
+gear dropdown.
+
+Cell editor (ie, code) is either hidden or displayed, by clicking the cell "in" or
+"out" facing arrows.
+
+Cell is appended by mousing over a break between cells, then clicking the "+ Add Paragraph".
+
+
+OML Notebook "Bindings"
+
+In an OML Notebook you are always connected an Oracle ADB. There are three "binding"
+options: low, medium and high. I always choose "high" because it provides the most
+memory. By default, notebooks are created with the "low" binding.
+    
+Here's how to set your binding. In an open OML Notebook, on the upper right side and
+above the first cell, notice the gear icon. Each cell has a gear icon, but this one is
+larger and in a square. When you mouse over the big gear, it will show, "Interpreter
+Binding". Click on the big gear. Drag the "high" interpreter to the top. It is probably
+at the bottom. Now, click "Save". When I re-open a notebook, sometimes I check
+this... I'm the paranoid type.
+    
+    
+In the first cell enter:
+
+
+%md    
+# Project 1: Detect Unusual DB Table Activity
+
+## DEVELOPMENT NOTEBOOK
+### Late Update: 2-Mar-2023
+
+## The Problem
+
+An application goes sideways, starts inserting rows and no one knows until four hours later. By then, the damage has been done.
+
+Would of been nice to have a table activity anomaly detection system running... hence this project.
+
+If this is not your world, read closely because you can apply this project to any table that grows over time. Two examples are using an INVOICE table or CUSTOMER table.
+
+## Our Solution
+
+Using the OCI OML Notebook Job facility, schedule anomaly detection every 20 minutes focused a specific table.
+    
+
+
+Now run this first cell, by pressing its run button. Exciting... I know. I promise you
+it will get better.
+
+
+Find the most active tables.
+
+While you can choose any table to check for anomalous activity, another option is to
+choose an active table.
+    
+Oracle's AWR does not sample all object activity. Oracle sets a threshold which
+determines if an object will be sampled. Therefore, active objects will be consistently
+sampled. We use this knowledge to highlight the most generally active tables.
+    
+Here is how you can easily find a very activity table, within a %sql cell.
+
+Add a new cell and enter:
+
+
+%sql
+/* 
+Find the most active tables.     
+
+We want to monitor a key business table, which will likely be 
+consistently active.
+
+A consistently active table will be consistently activity sampled
+with the activity storedin the DBA_HIST_SEG_STAT[_OBJ] tables.
+
+This simple SQL script will highlight these active tables.
+
+Note: The SQL is reference my training data. 
+
+Display options:
+1. Table (default)
+2. Line Chart; keys: Object_name, groups: NA, values: count(snap.snap_id)
+
+*/
+
+select  obj.object_name, obj.owner, obj.dbid, obj.con_dbid, obj.con_id,
+        count(snap.snap_id)
+from    emt_dba_hist_seg_stat stat,     -- My training data 
+        emt_dba_hist_seg_stat_obj obj,  -- My training data
+        emt_dba_hist_snapshot snap      -- My training data
+where   snap.snap_id = stat.snap_id
+  and   snap.dbid    = stat.dbid
+  and   snap.instance_number = stat.instance_number
+  and   snap.con_id = stat.con_id
+  and   stat.dbid = obj.dbid
+  and   stat.ts# = obj.ts#
+  and   stat.obj# = obj.obj#
+  and   stat.dataobj# = obj.dataobj#
+  and   stat.con_dbid = obj.con_dbid
+  and   stat.con_id   = obj.con_id
+and   obj.object_type = 'TABLE'
+group by obj.object_name, obj.owner, obj.dbid, obj.con_dbid, obj.con_id
+order by 6 desc, 1 
+
+
+Run the cell. (Sometimes the first %sql cell takes a few seconds to run.)
+
+If you are using my "emt_" tables, you will see something like this:
+            
+        eim_asset siebel_owner
+        agreement_sap siebel_dataload
+        dm_material_map_to_secd_merge
+        agreement_sap_fltr_stg
+        cx_reporting_metrics
+        s_srv_req siebel_owner *
+        s_org_ext
+        s_evt_act
+        s_contact *
+        s_srm_request *
+        s_asset
+        ...
+        s_user
+    
+For this project, I choose table, S_SRV_REQ. Another good option is S_CONTACT
+(siebel_owner) and S_SRM_Request (siebel_owner). I'm sure there are other good
+candidates.
+
+
+
+Explore the chosen table
+
+If you are NOT using my "emt_" tables, remove the "emt_" in the DBA_HIST tables
+below. Also, the snippet below is exploring the S_SRV_REQ table. If you are exploring
+another table, make the appropriate change.
+
+Add a new cell and enter:
+
+
+%script
+/*
+Explore table activity data, for a chosen table.
+
+Use this cell to quickly explore the data.
+Make some changes then in the cell below, view the changes.
+
+Our objective is to look for problem data and
+to look for preprocessing opportunities that will
+increase model anomaly detection power.
+
+Note: Using a view and not a table, because it is
+faster, takes less spaces, consumes less CPU and IO,
+and seems optimal for experimentation.
+
+*/
+
+create or replace view data_full_v
+as
+select  snap.snap_id,
+        snap.BEGIN_INTERVAL_TIME,
+        '['||regexp_replace(to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','')||']' dow,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Sunday' then 1 else 0 end Sunday,
+        EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) hod,
+        CASE when EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) between  6 and 11 then 1 else 0 end morning,
+        obj.object_name,
+        obj.owner, 
+        stat.logical_reads_delta,
+        stat.db_block_changes_delta,
+        stat.physical_reads_delta,
+        stat.itl_waits_delta,
+        stat.row_lock_waits_delta,
+        stat.gc_cr_blocks_served_delta,
+        stat.gc_cu_blocks_served_delta,
+        stat.GC_CR_BLOCKS_RECEIVED_DELTA,
+        stat.GC_CU_BLOCKS_RECEIVED_DELTA,
+        stat.gc_buffer_busy_delta,
+        stat.space_used_delta,
+        stat.space_allocated_delta,
+        stat.chain_row_excess_delta,        
+        stat.PHYSICAL_READS_DIRECT_DELTA
+from    emt_dba_hist_seg_stat stat,
+        emt_dba_hist_seg_stat_obj obj,
+        emt_dba_hist_snapshot snap
+where   snap.snap_id = stat.snap_id
+  and   snap.dbid    = stat.dbid
+  and   snap.instance_number = stat.instance_number
+  and   snap.con_id = stat.con_id
+  and   stat.dbid = obj.dbid
+  and   stat.ts# = obj.ts#
+  and   stat.obj# = obj.obj#
+  and   stat.dataobj# = obj.dataobj#
+  and   stat.con_dbid = obj.con_dbid
+  and   stat.con_id   = obj.con_id
+  and   obj.object_name = 'S_SRV_REQ'       -- Chosen table
+  and   obj.owner       = 'SIEBEL_OWNER';   -- Chosen table owner
+
+
+Run the cell to create the view.
+
+Add a new cell and enter:
+
+
+%sql
+/*
+Explore the view data.
+*/
+select * from data_full_v;
+
+
+Run the cell and look at the data. Focus on:
+
+- Character or numeric data
+- No values or NULLs
+- all the same value (eg, 0, Y, True, etc.)
+- Spaces before or after the character data
+- What attributes can we use to create new attributes?
+- What attributes add no value to the model?
+    
+    
+Create/Replace Our Full Data view
+
+Taking the above observations into consideration, below here is the final view
+definition. This is data we will be give to anomaly detection algorithm.
+
+Based on the previous chapters, my observations and the resulting code changes should
+make some sense
+
+- Commented out BEGIN_INTERVAL_TIME, because it is not a number and will add no value
+  to the model.
+
+- Commented out the "dow" (day of week) engineered feature, because I have chosen to
+  one-hot-encode the weekdays, which is directly below the original "dow" line.
+
+- Each day of the week has been one-hot-encoded to increase model awareness of the day
+  of the week. (Oh... Friday is usually busier than Mondays.)
+
+- Commented out the "hod" (hour of day) engineered feature, because I have chosen to
+  "bin" the hours, which is directly below this line.
+
+- Each hour of day has been binned into either morning, afternoon or night. This will
+  help the use the hour of the day in a more powerful way. (Oh... The night workloads
+  usually have much more update activity than during the morning.)
+
+- Commented out object_name and owner, because they are not numeric and add no value
+  to the model. Even if we converted the object name and owner to a number, since we
+  are focusing on a single table, all column/attribute values would be same. Columns
+  with the same value do not increase model power, consume more memory and more CPU
+  processing power. (Remember; The best feature is no feature.)
+
+Create a new cell and enter:
+        
+%script
+/*
+
+Re-Create data_full_v view to:
+
+1. ONLY include our desired features (pre-existing and engineered) and
+2. ONLY for our desire table.
+
+After re-creating the view, see the results by running ABOVE cell.
+
+*/
+
+create or replace view data_full_v
+as
+select  snap.snap_id,
+        --snap.BEGIN_INTERVAL_TIME,
+        --'['||regexp_replace(to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','')||']' dow,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Sunday' then 1 else 0 end Sunday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Monday' then 1 else 0 end Monday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Tuesday' then 1 else 0 end Tuesday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Wednesday' then 1 else 0 end Wednesday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Thursday' then 1 else 0 end Thursday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Friday' then 1 else 0 end Friday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Saturday' then 1 else 0 end Saturday,
+        --EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) hod,
+        CASE when EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) between  6 and 11 then 1 else 0 end morning,
+        CASE when EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) between 12 and 17 then 1 else 0 end afternoon,
+        CASE when EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) between 18 and 23 or
+                  EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) between  0 and  5 then 1 else 0 end night,
+        --obj.object_name,
+        --obj.owner, 
+        stat.logical_reads_delta,
+        stat.db_block_changes_delta,
+        stat.physical_reads_delta,
+        stat.itl_waits_delta,
+        stat.row_lock_waits_delta,
+        stat.gc_cr_blocks_served_delta,
+        stat.gc_cu_blocks_served_delta,
+        stat.GC_CR_BLOCKS_RECEIVED_DELTA,
+        stat.GC_CU_BLOCKS_RECEIVED_DELTA,
+        stat.gc_buffer_busy_delta,
+        stat.space_used_delta,
+        stat.space_allocated_delta,
+        stat.chain_row_excess_delta,        
+        stat.PHYSICAL_READS_DIRECT_DELTA
+from    emt_dba_hist_seg_stat stat,
+        emt_dba_hist_seg_stat_obj obj,
+        emt_dba_hist_snapshot snap
+where   snap.snap_id = stat.snap_id
+  and   snap.dbid    = stat.dbid
+  and   snap.instance_number = stat.instance_number
+  and   snap.con_id = stat.con_id
+  and   stat.dbid = obj.dbid
+  and   stat.ts# = obj.ts#
+  and   stat.obj# = obj.obj#
+  and   stat.dataobj# = obj.dataobj#
+  and   stat.con_dbid = obj.con_dbid
+  and   stat.con_id   = obj.con_id
+  and   obj.object_name = 'S_SRV_REQ'        -- Chosen table
+  and   obj.owner       = 'SIEBEL_OWNER';    -- Chosen table owner
+   
+
+
+Run the cell. If you want see the results, above cell that contains, "select * from
+data_full_v;" Pretty cool, eh?
+
+
+
+Create Our Anomaly Detection Model
+
+With our data preprocessing completed, it's time to create the anomaly detection model.
+    
+Every model is based on a machine learning algorithm. For this project, I choose the
+popular One-Class Support Vector Machine algorithm. For this algorithm, we train the
+model with an expectation or suspicion regarding the percentage of anomalies in our
+training data set.
+
+Many projects have a well known percentage of anomalous. For this project, I chose
+5%, that is 0.05.
+
+Add a new cell and enter:
+
+
+%script
+/*
+Tag full dataset samples as either anomalous or not.
+
+One-Class Support Vector Machine
+Non-anomalies have a prediction of 1, anomalies 0.
+
+The SVM settings, SVMS_OUTLIER_RATE allows us to set the
+percentage of suspected anomalous in a dataset.
+
+The lower the outlier rate, larger the threshold band.
+The higher the outlier rate, the small/tighter the threshold band.
+
+The higher the SVMS_OUTLIER_RATE (0.20 > 0.01), we are saying the data is likely to
+contain more anomalous data. Which means, the model is expects to see more anomalies.
+So, with a higher SVMS_OUTLIER_RATE, you can expect to see more anomnaloes triggered.
+
+If you're model is detecting too many anomalies, reduce the SVMS_OUTLIER_RATE to
+create a larger threshold band.
+
+While we are not being doing this, these tagged suspected anomalies
+can used to TEST our final model and the remaining will be used to TRAIN
+our final model. 
+
+For our chosen algorithm, the Automatic Data Preparation (PREP_AUTO) will normalize
+all numeric features (mean=0, std=1) and any character/categorical
+features will be binned.
+
+Notice we are still referencing the data_full_v view.
+
+The model name is important and should be unique. It will be used in
+the DEPLOYMENT notebook.
+
+*/
+
+BEGIN
+    DBMS_DATA_MINING.DROP_MODEL('MODEL_SVM_AD');
+    EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+DECLARE
+    v_setlist DBMS_DATA_MINING.SETTING_LIST;
+    
+BEGIN
+    v_setlist('PREP_AUTO')          := 'ON'; -- Numerical attributes are normalized.
+    v_setlist('ALGO_NAME')          := 'ALGO_SUPPORT_VECTOR_MACHINES';
+    v_setlist('SVMS_OUTLIER_RATE')  := '0.05';  -- 0.10 = 10%
+    
+    DBMS_DATA_MINING.CREATE_MODEL2(
+        MODEL_NAME          => 'MODEL_SVM_AD',
+        MINING_FUNCTION     => 'CLASSIFICATION',
+        DATA_QUERY          => 'SELECT * FROM data_full_v',
+        SET_LIST            => v_setlist,
+        CASE_ID_COLUMN_NAME => 'SNAP_ID',
+        TARGET_COLUMN_NAME  => NULL);
+END;
+/
+
+
+
+Run the cell. If you are using my "emt_" data, the model will be created in around
+5 seconds. For production systems, it can take over 60 seconds.
+
+
+Add a new cell and enter:
+
+
+%sql
+/*
+
+Check to ensure the model is predicting properly.
+
+This is not a model evaluation.
+
+It is more of a "is it working or not." The COUNT
+should result is correct SVMS_OUTLIER_RATE.
+
+This SQL below will be very important in the
+DEPLOYMENT notebook.
+
+*/
+
+
+SELECT count(snap_id), PREDICTION(MODEL_SVM_AD USING *)
+from   data_full_v
+group by PREDICTION(MODEL_SVM_AD USING *);
+
+
+COUNT(SNAP_ID)   PREDICTION(MODEL_SVM_ADUSING*)   
+            5524                                1 
+             291                                0 
+
+It's important to understand that just because a model is working as designed and
+expected, it does imply the model will be useful for its intended deployed purpose.
+For this, a more thorough evaluation than I have done above is necessary.
+
+
+
+-------------------------------------------------------------
+Project Deployment
+
+There are many ways to deploy ML projects. For this project, since we are working in an
+OCI Autonomous Database environment for both model development and deployment, it is
+a natural choice to utilize any available builtin deployment options.
+
+Once such "builtin" deployment option is to:
+
+- Deploy into your production ADB directly, without any need for external database
+  security or communication requirements.
+
+- No requirement to export, move and import the ML model from one environment to the
+  other. This operation may seem trivial, but it is not trivial.
+
+- Create a notebook that is scheduled to automatically run every 20 minutes.
+  OML has be ability to schedule a notebook to automatically run. It is simple and
+  it works!
+
+There are a couple of key points to keep in mind:
+
+- We are never touching production business data, only Oracle DB segment activity
+  statistics that are automatically collected my the AWR. For most environments, this
+  is very important know and understand.
+
+- All the deployed Oracle DB user needs is SELECT access on three AWR views:
+
+    DBA_HIST_SNAPSHOT provides SNAP_ID details
+    DBA_HIST_SEG_STAT provides ACTIVITY details (over 14 attributes)
+    DBA_HIST_SEG_STAT_OBJ provides NAME details; object, tablespace, etc.
+
+- Each time the deployment notebook is run, it will build the anomaly detection model
+  and check for the table activity anomaly. This decreases deployment complexity
+  because the model is not saved. In fact, after the prediction the can be and is
+  deleted.
+
+Rebuilding the model also insures the model is aware of the latest AWR data, which
+means the model will never become "stale." This is a wonderful benefit of having the
+model built during each anomaly detection check.
+
+With this in mind, let's get started.
+
+
+ML Deployment User Setup
+
+Below I refer to a "production environment." If you were using my "emt_" training data,
+your "production environment" is actually your development environment.
+
+Regardless of your deployment strategy, you will create a new ADB DB user, ML_DEPLOY.
+You will then have three DB users, ADMIN, ML_DEVEL and ML_DEPLOY.
+
+Regardless of your deployment strategy, you will be accessing true AWR data. The
+difference is in the database you are connecting to.
+
+If you used my "emt_" tables to train the model, you will be checking the
+SYS.COL_USAGE$ table for anomalies.
+
+Before we can create the deployment Notebook and deploy it, we need to create the
+ML_DEPLOY Oracle DB user.
+
+
+    Create Deployment Oracle DB User
+
+    Sign in to OCI, goto your "production" ADB home page.
+    Click Database Actions >
+        Ensure ADMIN user shown on upper right of screen
+            If not, click displayed username > Sign Out > Sign In as ADMIN
+    Click Database Actions > Administration > Database Users
+    Click "+ Create User" near the right side of your screen
+        User Name: ML_DEPLOY
+        Password: *****
+        Quota on tablespace DATA: 500M  (default is 100M)
+        Password Expired: Off
+        Account is Locked: Off
+        Graph: Off
+        Web Access: On
+        OML: On
+    Click: Create
+
+
+    Grant DBA_HIST view SELECT to Deployment DB User
+
+    Regardless of your "production" system, true AWR data will be used to check for
+    table anomalies. You can use either your desktop SQL*Developer client or the
+    DB Actions web-based SQL*Developer. While the SQL is exactly the same, I am using
+    the DB Actions web-based SQL*Developer interface.
+    
+    Here are the steps to enable your deployment user access to the AWR data.
+
+    Sign in to OCI, goto your "production" ADB home page.
+    Click Database Actions >
+        Ensure ADMIN user shown on upper right of screen
+            If not, click displayed username > Sign Out > Sign In as ADMIN
+    Click Database Actions > Development: SQL
+    Enter and run these three SQL statements:
+    
+        grant select on dba_hist_seg_stat to ML_DEPLOY;
+        grant select on dba_hist_seg_stat_obj to ML_DEPLOY;
+        grant select on dba_hist_snapshot to ML_DEPLOY;
+
+
+    Create Anomaly Detection Results table
+
+    Placing all the results into a single table provides significant benefits:
+    
+    - A log of all detection activity.
+    - If you choose to check for anomalous activity for other tables,all the results
+      will be in a single table.
+    - This log can be used by operational systems to trigger an alert.
+    
+    Keep in mind the ML_DEPLOY user owns the anom_detect_results table.
+    
+    To create the ML_DEPLOY.anom_detect_results table do this:
+
+    Sign in to OCI, goto your "production" ADB home page.
+    Click Database Actions >
+        Ensure ML_DEPLOY user shown on upper right of screen
+            If not, click displayed username > Sign Out > Sign In as ML_DEPLOY
+    Click Database Actions > Development: SQL
+    Enter and run these two SQL statements:
+    
+        drop table anom_detect_results;  -- Expect this to error the first time
+        create table anom_detect_results (
+            dt_ts               timestamp,
+            owner               varchar2(128),
+            object_name         varchar2(128),
+            prediction          number,
+            prediction_prob     number,
+            snap_id             number,
+            dbid                number,
+            instance_number     number,
+            con_id              number,
+            begin_interval_time timestamp,
+            end_interval_time   timestamp);
+            
+
+Create Deployment OML Notebook
+
+Now that your "production" environment has been decided and your ML_DEPLOY DB user has
+been created along with the anomaly detection log table, it's time to create the
+Deployment Notebook!
+
+Most of the SQL has already been written and is contained in the Development Notebook.
+However, I have (very) conveniently included it below, along with the changes.
+
+First, we need to create a new empty Deployment Notebook.
+
+    Sign in to OCI, goto your "production" ADB home page.
+    Click Database Actions >
+        Ensure ML_DEPLOY user shown on upper right of screen
+            If not, click displayed username > Sign Out > Sign In as ML_DEPLOY
+    Click Database Actions > Development: Oracle Machine Learning
+    Click the hamburger menu in the upper left
+        > Project > Notebooks
+    Click "+ Create" to create a new notebook
+        Name: Project 1 Deployment
+        Comment: Unusual Oracle DB Table Activity Detection
+        Click OK button and eventually you see a new empty notebook.
+
+First check the "interpreter binding" by clicking on the "big" gear above the first
+cell. You will probably need to drag the "high" binding to the top. Be sure to save
+the binding.
+
+Only one main cell is used. Unlike SQL*Plus, the "defines" are not available in other
+cells. This is why the code is in the same cell as the defines.
+
+In the first and only markdown cell in this notebook, enter:
+
+
+%md
+# Project 1: Detect Unusual DB Table Activity
+
+## DEPLOYMENT NOTEBOOK
+### Late Update: 2-Mar-2023
+
+## The Problem
+
+An application goes sideways, starts inserting rows and no one knows until four hours later. By then, the damage has been done.
+
+Would of been nice to have a table activity anomaly detection system running... hence this project.
+
+If this is not your world, read closely because you can apply this project to any table that grows over time. Two examples are using an INVOICE table or CUSTOMER table.
+
+## Our Solution
+
+Using the OCI OML Notebook Job facility, schedule anomaly detection every 20 minutes focused a specific table.
+
+
+
+In the first code cell in this notebook, enter:
+
+
+%script
+/*
+Check:
+
+    1. The source tables are the true AWR tables (eg., dba_hist_snapshot)
+       and NOT the training tables (eg, emt_dba_hist_snapshot).
+
+    2. Check the below settings. No code should need be to be changed.
+    
+    3. Output: When this cell has completed, the final line should
+       be, "1 row inserted."
+       
+Note: Defines are maintained within a single cell. This is why nearly all
+      code is single a single cell.
+
+*/
+
+-- Deployment table to check for anomaly and the sensitivity settings
+def owner             = "SIEBEL_OWNER"
+def object_name       = "S_SRV_REQ"
+def SVMS_OUTLIER_RATE = "0.05"  -- Increase value will DECREASE likelihood of anomaly detected
+
+-- The two below defines overwrite the above defines.
+-- Uncomment the below two defines if you are either:
+-- 1. TESTING or
+-- 2. Your "production" system is same as your development system.
+def owner = "SYS"
+def object_name = "COL_USAGE$"
+
+-- Misc Settings (probably do not change)
+def data_full_v = "data_full_v_deploy"
+
+create or replace view &data_full_v
+as
+select  snap.snap_id,
+        --snap.BEGIN_INTERVAL_TIME,
+        --'['||regexp_replace(to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','')||']' dow,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Sunday' then 1 else 0 end Sunday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Monday' then 1 else 0 end Monday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Tuesday' then 1 else 0 end Tuesday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Wednesday' then 1 else 0 end Wednesday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Thursday' then 1 else 0 end Thursday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Friday' then 1 else 0 end Friday,
+        CASE regexp_replace( to_char(snap.BEGIN_INTERVAL_TIME, 'Day'), '[[:space:]]*','') when 'Saturday' then 1 else 0 end Saturday,
+        --EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) hod,
+        CASE when EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) between  6 and 11 then 1 else 0 end morning,
+        CASE when EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) between 12 and 17 then 1 else 0 end afternoon,
+        CASE when EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) between 18 and 23 or
+                  EXTRACT(HOUR FROM snap.BEGIN_INTERVAL_TIME) between  0 and  5 then 1 else 0 end night,
+        --obj.object_name,
+        --obj.owner, 
+        stat.logical_reads_delta,
+        stat.db_block_changes_delta,
+        stat.physical_reads_delta,
+        stat.itl_waits_delta,
+        stat.row_lock_waits_delta,
+        stat.gc_cr_blocks_served_delta,
+        stat.gc_cu_blocks_served_delta,
+        stat.GC_CR_BLOCKS_RECEIVED_DELTA,
+        stat.GC_CU_BLOCKS_RECEIVED_DELTA,
+        stat.gc_buffer_busy_delta,
+        stat.space_used_delta,
+        stat.space_allocated_delta,
+        stat.chain_row_excess_delta,        
+        stat.PHYSICAL_READS_DIRECT_DELTA
+from    dba_hist_seg_stat stat,             ---- True AWR table
+        dba_hist_seg_stat_obj obj,          ---- True AWR table
+        dba_hist_snapshot snap              ---- True AWR table
+where   snap.snap_id = stat.snap_id
+  and   snap.dbid    = stat.dbid
+  and   snap.instance_number = stat.instance_number
+  and   snap.con_id = stat.con_id
+  and   stat.dbid = obj.dbid
+  and   stat.ts# = obj.ts#
+  and   stat.obj# = obj.obj#
+  and   stat.dataobj# = obj.dataobj#
+  and   stat.con_dbid = obj.con_dbid
+  and   stat.con_id   = obj.con_id
+  and   obj.object_name = '&object_name'
+  and   obj.owner       = '&owner';
+
+BEGIN
+    DBMS_DATA_MINING.DROP_MODEL('MODEL_DEPLOY_TEMP');
+    EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+DECLARE
+    v_setlist DBMS_DATA_MINING.SETTING_LIST;
+    
+BEGIN
+    v_setlist('PREP_AUTO') := 'ON'; -- Numerical attributes are normalized.
+    v_setlist('ALGO_NAME') := 'ALGO_SUPPORT_VECTOR_MACHINES';
+    v_setlist('SVMS_OUTLIER_RATE') := '&SVMS_OUTLIER_RATE';  -- 0.10 = 10%
+    
+    DBMS_DATA_MINING.CREATE_MODEL2(
+        MODEL_NAME          => 'MODEL_DEPLOY_TEMP',
+        MINING_FUNCTION     => 'CLASSIFICATION',
+        DATA_QUERY          => 'SELECT * FROM &data_full_v',
+        SET_LIST            => v_setlist,
+        CASE_ID_COLUMN_NAME => 'SNAP_ID',
+        TARGET_COLUMN_NAME  => NULL);
+END;
+/
+
+insert into anom_detect_results
+(
+select  systimestamp,
+        obj.owner,
+        obj.object_name,
+        pred.prediction,
+        pred.prediction_prob,
+        obj.snap_id, dbid, instance_number, con_id,
+        begin_interval_time, end_interval_time
+from    (
+        SELECT  sysdate,
+                snap_id,
+                dbid, instance_number, con_id,
+                begin_interval_time, end_interval_time,
+                '&owner' owner,
+                '&object_name' object_name
+        from    dba_hist_snapshot
+        where   snap_id = (select distinct(max(snap_id)) from &data_full_v)
+        ) obj,
+        ( 
+        select  snap_id,
+                prediction(MODEL_DEPLOY_TEMP USING *) prediction,
+                prediction_probability(MODEL_DEPLOY_TEMP USING *) prediction_prob
+        from    &data_full_v
+        where   snap_id = (select distinct(max(snap_id)) from &data_full_v)
+        ) pred
+where obj.snap_id = pred.snap_id
+)
+;
+
+BEGIN
+    DBMS_DATA_MINING.DROP_MODEL('MODEL_DEPLOY_TEMP');
+    EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
+
+
+Add a new cell and enter:
+
+
+%script
+
+select count(*) from anom_detect_results;
+
+select  *
+from    anom_detect_results
+where   dt_ts = (select max(dt_ts) from anom_detect_results);
+
+
+
+Before you run the cell/notebook, review the parameter settings near the top of the
+cell. Make any changes necessary and then continue.
+
+At very top of your Deployment notebook, there is a run button that will run ALL the
+notebook cells. When deployed using the OML Jobs facility, all the notebook cells
+will be run. A good final test is to run "ALL" the notebook cells a couple of times
+and observe the results in the anom_detect_results table. This is when using the
+desktop SQL*Developer client is useful; one desktop window for SQL*Developer
+client and the other for OCI.
+
+Here is a nice SQL statement to check your anom_detect_results table.
+
+select  dt_ts at time zone 'US/Pacific' predict_time_pacific,
+        owner,
+        object_name,
+        prediction,
+        round(prediction_prob,3) prediction_prob,
+        snap_id
+from    anom_detect_results
+order by 1 desc
+
+Remember that an anomaly prediction of 0 means an anomaly was detected. A prediction
+of 1 means an anomaly was not predicted.
+
+If after each notebook run, you see an additional row in the anom_detect_results table,
+life is good. If so, then proceed to the next section where you will schedule the
+notebook to be automatically run!
+
+
+
+Automatically Run The Deployment Notebook
+
+Once you are confident the Deployment Notebook is working as expected, it is to time to
+schedule the notebook to run at a certain frequency. For example, every 15 minutes.
+
+    How Often To Check For Anomalous
+
+    Determining how frequent to check for the table activity anomaly is an important
+    consideration. There is no right answer, but there are wrong answers.
+
+If there is no new AWR data, then the anomaly detector should produce the exact
+same result as the prior run. So, running the detector every 5 minutes, with a 60
+minute AWR snap frequency is usually not a great solution.
+
+Keep in mind, that each run costs money.
+
+Let's make up an example. Suppose the AWR snaps occur every 60 minutes and you want to
+know within 30 minutes if an anomaly has occurred. Running every 32 or 22 minutes
+makes sense. Why not check every 20 or 30 minutes? It can take a minute or so for a
+snap to complete. So, you don't want to check at 9:00 and have the snap complete
+at 9:01. 
+
+You may find, increasing the snap frequency to 30 minutes and then checking
+for anomalies every 17 minutes is a good solution.
+
+Whatever you choose, it's important to think this through.
+
+
+    Creating The OML Notebook Job
+    
+Let's get the job created!
+
+On the your OML "home page", look for the "Quick Actions" area, and
+you will see a "Jobs" icon. You can also click the OML "hamburger" and you will a
+Jobs entry. Either navigation will work. Here is the full navigation:
+
+    If you currently in your ML Deployment notebook as ML_DEPLOY,
+        skip to the "hamburger" line below.
+        
+    Sign in to OCI, goto your "production" ADB home page.
+    Click Database Actions >
+        Ensure ML_DEPLOY user shown on upper right of screen
+            If not, click displayed username > Sign Out > Sign In as ML_DEPLOY
+    Click Database Actions > Development: Oracle Machine Learning
+    Click the hamburger menu in the upper left
+        > Jobs
+    Click "+ Create"
+        Name: Project 1 Deployment Job
+        Notebook:  Click the search icon, then select/highlight your Deployment Notebook,
+                   Click OK
+        Start Date: You probably want to start immediately, which is the default.
+        Repeat Frequency: Let's start with 5 minutes, so you can quickly get some results. You probably want to increase time time from 5 to something like 17 or 32 minutes. You can edit the job after you create the job and see that everything is working.
+        Click "Advanced Settings"
+        Maximum Number of Runs: Keep unchecked. If you are the responsible paranoid type, then set to 3. If all turns out well, then when you edit the job, and uncheck this.
+        Timeout in minutes: 9
+        Failure Handling > Check, "Maximum Failures Allowed" and set to 2. The notebook should never fail, but just in case, we will let it try again.
+        Click OK
+
+
+    Monitoring The Job
+
+You may have noticed in the "Jobs" screen, there are a number of status related columns.
+
+The jobs page automatically refreshes, so you will see "Status" change from SCHEDULED"
+to "RUNNING" and then to either "Success" or "Failed".
+
+The ultimate indicator of success is after a run will see an additional row in the
+ML_DEPLOY.anom_detect_results table. This will occur, even if there is no new AWR data.
+
+If for any reason, you want to stop a scheduled job or restart job scheduling, simply
+check the notebook and click on either the "Stop" or "Start" button. These are located
+directly above the job listing.
+
+You did it! Did you know that 80% of ML projects are never deployed. Deployment
+experience is a rare commodity. Congratulations!
+
+
+-------------------------------------------------------------
+Ways To Improve The Model
+
+Change the model sensitivity.
+Change the model attributes/features.
+Use a different deployment method.
+Create deployment notebooks for other tables and schedule them.
+Enhance the code, so more than one table can be monitor in a single script.
+Experiment with different algorithms.
+Use multiple algos and combined results.
+Enhance explainability. What features changed?
+
+
+-------------------------------------------------------------
+References For Craig:
+
+    Detect anomalies with OML4SQL using one-class support vector machine (SVM)
+        https://apexapps.oracle.com/pls/apex/r/dbpm/livelabs/run-workshop?p210_wid=3079&p210_wec=&session=13109600097986
+    OML DB User setup:
+        https://apexapps.oracle.com/pls/apex/r/dbpm/livelabs/view-workshop?wid=560&clear=RR,180&session=11350794341568
+    Strategy for running notebook JOBS:
+        https://apexapps.oracle.com/pls/apex/r/dbpm/livelabs/run-workshop?p210_wid=922&p210_wec=&session=115487350311072
+    OML Admin: users and notebooks
+        https://docs.oracle.com/en/database/oracle/machine-learning/oml-notebooks/
+    SVM NOT AD, but interactive deployment:
+        https://apexapps.oracle.com/pls/apex/r/dbpm/livelabs/run-workshop?p210_wid=3079&p210_wec=&session=13109600097986
+    Data: /Users/cshallah/Desktop/Machine Learning/Data from Ned/202301 Segment/01-08-2023 Cleaned Data Extract for ML
+
+--END of Project 1.
+
+
