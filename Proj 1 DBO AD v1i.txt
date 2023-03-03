@@ -1,4 +1,4 @@
-v1h 2-Mar-2023 at 3:07pm
+v1i 3-Mar-2023 at 8:31am
 
 ----------------------------------
 Record your OCI details, if you want to. My details are shown below.
@@ -248,13 +248,18 @@ learns this nightly activity is not unusual.
     Using My Training Data
 
 If at this time, you are not deploying your model into a production Oracle Autonomous
-Database, you can use my AWR data in the Development OML Notebook. Simply download these
-three CSV files to your desktop.
+Database, you can use my AWR data in the Development OML Notebook.
 
-    http://filebank.orapub.com/DataSets/emt_dba_hist_seg_stat.csv
-    http://filebank.orapub.com/DataSets/emt_dba_hist_seg_stat_obj.csv
-    http://filebank.orapub.com/DataSets/emt_dba_hist_snapshot.csv
-    
+There are three zipped CSV files. You can see and download them here:
+
+https://github.com/cshallahamer/2023-03-UTOUG-OML-Obj-AD
+   
+Unzip all three files, resulting in these three CSV files.
+
+    emt_dba_hist_seg_stat.csv
+    emt_dba_hist_seg_stat_obj.csv
+    emt_dba_hist_snapshot.csv
+ 
 With the three CSV in your possession, skip down to the section, "ML Development
 Data Loading"
 
@@ -1312,7 +1317,7 @@ References For Craig:
         https://docs.oracle.com/en/database/oracle/machine-learning/oml-notebooks/
     SVM NOT AD, but interactive deployment:
         https://apexapps.oracle.com/pls/apex/r/dbpm/livelabs/run-workshop?p210_wid=3079&p210_wec=&session=13109600097986
-    Data: /Users/cshallah/Desktop/Machine Learning/Data from Ned/202301 Segment/01-08-2023 Cleaned Data Extract for ML
+    Data: /Users/cshallah/Desktop/Machine Learning/Data from Bob/202301 Segment/01-08-2023 Cleaned Data Extract for ML
 
 --END of Project 1.
 
