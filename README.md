@@ -5,6 +5,10 @@ The conference Powerpoint presentation is available on the OraPub website, www.o
 
 ------------------------------------------------------------------------------
 Use OML AI To Detect Unusual DB Object Activity
-------------------------------------------------------------------------------
 
 An application goes sideways and no one knows about it... for hours. By then, the data damage is complete. It sure would have been nice to have an "unusual table activity detector." In this presentation, I will teach you and demonstrate how to build and deploy an Oracle Database Object Activity anomaly detection system using Oracle ML and the Oracle Autonomous DB. You can download the code and give it try!
+
+------------------------------------------------------------------------------
+How To Do The Project
+
+To do this project, follow the instructions in the "Proj 1 DBO AD" text file.
